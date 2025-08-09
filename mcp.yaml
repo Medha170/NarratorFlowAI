@@ -1,0 +1,17 @@
+# mcp.yaml
+
+name: narrative-flow-ai
+description: A tool that analyzes the emotional arc and structure of a text.
+tools:
+  - name: analyze_narrative
+    description: Analyzes the sentiment of a given text and provides structural feedback.
+    function:
+      name: analyze_narrative_endpoint
+      input_schema:
+        type: object
+        properties:
+          text:
+            type: string
+            description: The full text to be analyzed, such as a LinkedIn post, a short story, or a poem.
+        required:
+          - text

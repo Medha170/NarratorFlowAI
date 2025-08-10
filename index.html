@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Narrative Flow AI Demo</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; }
+        textarea { width: 100%; height: 200px; padding: 10px; margin-bottom: 20px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        #results { margin-top: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        #feedbackList li { margin-bottom: 10px; }
+        img { max-width: 100%; height: auto; margin-top: 20px; border: 1px solid #eee; }
+    </style>
+</head>
+<body>
+    <h1>Narrative Flow AI Demo</h1>
+    <p>Paste your text below and get instant feedback on its emotional arc and structure.</p>
+
+    <textarea id="inputText" placeholder="Paste your text here..."></textarea>
+    <button onclick="analyzeText()">Analyze Text</button>
+
+    <div id="results">
+        <h3>Analysis Results</h3>
+        <p id="summary"></p>
+        <ul id="feedbackList"></ul>
+        <div id="imageContainer"></div>
+    </div>
+
+    <script>
+        // REPLACE THIS WITH YOUR RENDER URL
+        const API_URL = "https://narratorflowai.onrender.com";
+
+        async function analyzeText() {
+            const inputText = document.getElementById("inputText").value;
+            if (!inputText) {
+                alert("Please enter some text to analyze.");
+                return;
+            }
+
+            const resultsDiv = document.getElementById("results");
+            resultsDiv.style.display = 'block'; // Show the results section
+            document.getElementById("summary").innerText = "Analyzing...";
+            document.getElementById("feedbackList").innerHTML = "";
+            document.getElementById("imageContainer").innerHTML = "";
+
+            try {
+                const response = await fetch(`${API_URL}/analyze-narrative`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: inputText }),
+                });
+
+                const data = await response.json();
+
+                document.getElementById("summary").innerText = `Analysis Summary: ${data.analysis_summary.num_sentences} sentences found. Average Polarity: ${data.analysis_summary.average_polarity.toFixed(2)}`;
+
+                const feedbackList = document.getElementById("feedbackList");
+                data.feedback.forEach(item => {
+                    const li = document.createElement("li");
+                    li.textContent = item;
+                    feedbackList.appendChild(li);
+                });
+
+                const imageContainer = document.getElementById("imageContainer");
+                const img = document.createElement("img");
+                img.src = `${API_URL}${data.emotional_arc_plot_url}`;
+                img.alt = "Emotional Arc Plot";
+                imageContainer.appendChild(img);
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById("summary").innerText = "An error occurred during analysis.";
+            }
+        }
+    </script>
+</body>
+</html>

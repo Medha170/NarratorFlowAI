@@ -1,10 +1,14 @@
-# mcp.yaml
-
 name: narrative-flow-ai
-description: A tool that analyzes the emotional arc and structure of a text.
+description: >
+  A tool that analyzes the emotional arc and structure of a text.
+  Requires NLTK/TextBlob corpora (including 'punkt_tab') to be available
+  in the runtime environment.
+
 tools:
   - name: analyze_narrative
-    description: Analyzes the sentiment of a given text and provides structural feedback.
+    description: >
+      Analyzes the sentiment of a given text and provides structural feedback.
+      Uses NLTK sentence tokenization and TextBlob sentiment analysis.
     function:
       name: analyze_narrative_endpoint
       input_schema:
@@ -12,6 +16,11 @@ tools:
         properties:
           text:
             type: string
-            description: The full text to be analyzed, such as a LinkedIn post, a short story, or a poem.
+            description: >
+              The full text to be analyzed, such as a LinkedIn post, a short story,
+              or a poem. The text should be plain UTF-8 encoded text.
         required:
           - text
+    requirements:
+      - nltk_data: punkt_tab
+      - textblob_corpora: default

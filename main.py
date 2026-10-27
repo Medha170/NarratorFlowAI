@@ -1,118 +1,207 @@
-import os
-import uuid
+import asyncio
+import numpy as np
+from contextlib import asynccontextmanager
+from typing import List, Dict, Any
 
-import nltk
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from matplotlib.figure import Figure
-from pydantic import BaseModel
-from textblob import TextBlob
+from pydantic import BaseModel, Field
+from transformers import pipeline
 
-# Ensure plot directory exists
-OS_PLOT_DIR = "plots"
-os.makedirs(OS_PLOT_DIR, exist_ok=True)
+emotion_classifier = None
 
-app = FastAPI(title="Narrative Flow AI", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for FastAPI.
+    Handles startup and shutdown events cleanly without blocking API initialization.
+    """
+    global emotion_classifier
 
+    print("Loading Hugging Face emotion classifier model...")
+    emotion_classifier = pipeline(
+        "text-classification",
+        model="j-hartmann/emotion-english-distilroberta-base",
+        return_all_scores=True,
+        device=-1
+    )
+    print("Model loaded successfully!")
+    yield
+    print("Shutting down application...")
 
-def ensure_nltk_resources() -> None:
-    """Ensure the sentence tokenizer data required by TextBlob is available."""
-    try:
-        nltk.data.find("tokenizers/punkt_tab")
-        return
-    except LookupError:
-        pass
+app = FastAPI(
+    title="Narrative Flow AI",
+    description="High-performance async engine for deep emotional arc and narrative analysis.",
+    version="2.0.0",
+    lifespan=lifespan
+)
 
-    try:
-        nltk.download("punkt_tab", quiet=True)
-    except Exception:
-        nltk.download("punkt", quiet=True)
-
-
-@app.on_event("startup")
-def startup_event() -> None:
-    ensure_nltk_resources()
-
-
-# Fix 1: Enable CORS for cross-origin frontend requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict to specific domains in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Fix 3: Mount static files directory for plot serving
-app.mount("/plots", StaticFiles(directory=OS_PLOT_DIR), name="plots")
+class AnalysisRequest(BaseModel):
+    text: str = Field(
+        ...,
+        min_length=10,
+        description="Text to analyse. Must contain at least 10 characters."
+    )
 
-
-class TextRequest(BaseModel):
+class SentenceEmotionPoint(BaseModel):
+    sentence_index: int
     text: str
+    dominant_emotion: str
+    confidence: float
+    emotion_scores: Dict[str, float]
 
+class NarrativeMetrics(BaseModel):
+    total_sentences: int
+    primary_arc_emotion: str
+    emotional_variance: float
+    pacing_intensity: float
 
-def analyze_sentiment(text: str) -> list[float]:
-    ensure_nltk_resources()
-    blob = TextBlob(text)
-    return [sentence.sentiment.polarity for sentence in blob.sentences]
+class AnalysisResponse(BaseModel):
+    metrics: NarrativeMetrics
+    sentence_analysis: List[SentenceEmotionPoint]
+    structural_feedback: List[str]
 
+def split_text_into_sentences(text: str) -> List[str]:
+    """
+    Helper function to split input text into clean sentences.
+    Handles standard punctuation and strips extraneous whitespace.
+    """
+    import re
+    sentences = re.split(r'(?<=[.!?])\s', text.strip())
+    return [s.strip() for s in sentences if s.strip()]
 
-def create_sentiment_plot(polarities: list[float], filename: str) -> str:
-    # Fix 2: Object-oriented Matplotlib to avoid thread-safety / memory leak issues
-    fig = Figure(figsize=(10, 5))
-    ax = fig.add_subplot(111)
+async def classify_sentence_async(sentence: str) -> List[Dict[str, Any]]:
+    """
+    Wraps the synchronous ML pipeline call inside an asyncio event loop thread pool.
+    Prevents heavy CPU inference from blocking other HTTP requests.
+    """
+    loop = asyncio.get_running_loop()
+    raw_output = await loop.run_in_executor(None, emotion_classifier, sentence)
 
-    ax.plot(polarities, marker="o", linestyle="-", color="b")
-    ax.set_title("Emotional Arc of the Text", fontsize=16)
-    ax.set_xlabel("Sentence Index", fontsize=12)
-    ax.set_ylabel("Sentiment Polarity (-1 = Negative, 1 = Positive)", fontsize=12)
-    ax.axhline(y=0, color="r", linestyle="--")
-    ax.grid(True)
-    ax.set_ylim(-1.1, 1.1)
+    if isinstance(raw_output, list) and len(raw_output) > 0:
+        if isinstance(raw_output[0], list):
+            return raw_output[0]
+        return raw_output
+    return []
 
-    plot_path = os.path.join(OS_PLOT_DIR, filename)
-    fig.savefig(plot_path, format="png")
-    return plot_path
-
-
-def get_structural_feedback(polarities: list[float]) -> list[str]:
-    feedback = []
-    if len(polarities) > 2:
-        max_pol, min_pol = max(polarities), min(polarities)
-        if (max_pol - min_pol) < 0.2:
-            feedback.append(
-                "The emotional arc is relatively flat. Consider adding tonal variation."
-            )
-
-    if polarities and polarities[-1] < 0.1:
-        feedback.append(
-            "The narrative ends on a neutral or low sentiment note. Consider a stronger conclusion."
+def calculate_narrative_metrics(sentence_data: List[SentenceEmotionPoint]) -> NarrativeMetrics:
+    """
+    Computes mathematical metrics accross the emotional arc using NumPy.
+    """
+    if not sentence_data:
+        return NarrativeMetrics(
+            total_sentences=0,
+            primary_arc_emotion="neutral",
+            emotional_variance=0.0,
+            pacing_intensity=0.0
         )
 
-    return feedback or ["Great job! The narrative flow seems well-structured."]
+    confidences = [item.confidence for item in sentence_data]
+
+    variance = float(np.var(confidences)) if len(confidences) > 1 else 0.0
+
+    intensity = float(np.mean(confidences))
+
+    emotion_counts = {}
+    for item in sentence_data:
+        emotion_counts[item.dominant_emotion] = emotion_counts.get(item.dominant_emotion, 0) + 1
+
+    primary_emotion = max(emotion_counts, key=emotion_counts.get)
+
+    return NarrativeMetrics(
+        total_sentences=len(sentence_data),
+        primary_arc_emotion=primary_emotion,
+        emotional_variance=round(variance, 4),
+        pacing_intensity=round(intensity, 4)
+    )
+
+def generate_structual_feedback(metrics: NarrativeMetrics, sentence_data: List[SentenceEmotionPoint]) -> List[str]:
+    """
+    Generates dynamic heuristics and narrative suggestions based on metrics.
+    """
+    feedback = []
+
+    if metrics.total_sentences < 3:
+        feedback.append("Text is short. Add more sentences to create a full emotional trajectory.")
+        return feedback
+
+    if metrics.emotional_variance < 0.01:
+        feedback.append("Monotonic Arc detected: THe story maintains alomost constant emotional tone. Introduce conflicts or shifts to enhance engagement.")
+
+    final_emotion = sentence_data[-1].dominant_emotion
+    if final_emotion in ["sadness", "fear", "anger"]:
+        feedback.append(f"Tense Ending: Your narrative resolves with '{final_emotion}'. Ensure this aligns with your desired payoff.")
+    elif final_emotion == "joy":
+        feedback.append("Uplifiting Ending: The story concludes on a high emotional note.")
 
 
-@app.post("/analyze-narrative")
-def analyze_narrative_endpoint(request: TextRequest):
-    polarities = analyze_sentiment(request.text)
-    feedback = get_structural_feedback(polarities)
+    if metrics.pacing_intensity > 0.85:
+        feedback.append("High Emotional Intensity: Sentences express strongly pronounced feelings throughout.")
 
-    filename = f"plot_{uuid.uuid4()}.png"
-    create_sentiment_plot(polarities, filename)
+    return feedback or ["Well-balanced narrative progression!"]
 
-    avg_polarity = sum(polarities) / len(polarities) if polarities else 0.0
 
-    return {
-        "analysis_summary": {
-            "num_sentences": len(polarities),
-            "average_polarity": round(avg_polarity, 2),
-        },
-        "feedback": feedback,
-        "emotional_arc_plot_url": f"/plots/{filename}",
-    }
+@app.post("/analyze-narrative", response_model=AnalysisResponse)
+async def analyze_narrative(request: AnalysisRequest):
+    """
+    Asynchronous REST endpoint that accepts text and outputs dynamic emotion trajectory JSON.
+    """
+    sentences = split_text_into_sentences(request.text)
+    if not sentences:
+        raise HTTPException(status_code=400, detail="Unable to extract meaningfulsentences from text.")
 
+    tasks = [classify_sentence_async(sentence) for sentence in sentences]
+    raw_results = await asyncio.gather(*tasks)
+
+    sentence_analysis: List[SentenceEmotionPoint] = []
+
+    for idx, (sentence, scores) in enumerate(zip(sentences, raw_results)):
+        if isinstance(scores, list):
+            emotion_map = {
+                item["label"]: round(float(item["score"]), 4) 
+                for item in scores 
+                if isinstance(item, dict) and "label" in item and "score" in item
+            }
+        else:
+            emotion_map = {}
+
+        if not emotion_map:
+            continue
+
+        dominant_label = max(emotion_map, key=emotion_map.get)
+        dominant_confidence = emotion_map[dominant_label]
+
+        sentence_analysis.append(
+            SentenceEmotionPoint(
+                sentence_index=idx,
+                text=sentence,
+                dominant_emotion=dominant_label,
+                confidence=dominant_confidence,
+                emotion_scores=emotion_map
+            )
+        )
+
+    metrics = calculate_narrative_metrics(sentence_analysis)
+    feedback = generate_structual_feedback(metrics, sentence_analysis)
+
+    return AnalysisResponse(
+        metrics=metrics,
+        sentence_analysis=sentence_analysis,
+        structural_feedback=feedback
+    )
 
 @app.get("/")
-def read_root():
-    return {"status": "online", "message": "Narrative Flow AI operational"}
+async def health_check():
+    """
+    Health check endpoint for production load balancers.
+    """
+    return {"status": "healthy", "model_loaded": emotion_classifier is not None}
+

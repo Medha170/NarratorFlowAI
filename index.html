@@ -3,78 +3,332 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Narrative Flow AI Demo</title>
+    <title>Narrative Flow AI - Emotional Arc Analyzer</title>
+    <!-- Include Chart.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; }
-        textarea { width: 100%; height: 200px; padding: 10px; margin-bottom: 20px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
-        #results { margin-top: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
-        #feedbackList li { margin-bottom: 10px; }
-        img { max-width: 100%; height: auto; margin-top: 20px; border: 1px solid #eee; }
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --border-color: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        h1 {
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+            margin-bottom: 16px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        #results {
+            display: none;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .metric-box {
+            background: #f1f5f9;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .metric-box h4 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-box p {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 350px;
+            width: 100%;
+            margin-bottom: 24px;
+        }
+
+        .feedback-list {
+            padding-left: 20px;
+            margin: 0;
+        }
+
+        .feedback-list li {
+            margin-bottom: 8px;
+        }
+
+        .error-message {
+            color: #dc2626;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+        }
     </style>
 </head>
-<body>
-    <h1>Narrative Flow AI Demo</h1>
-    <p>Paste your text below and get instant feedback on its emotional arc and structure.</p>
 
-    <textarea id="inputText" placeholder="Paste your text here..."></textarea>
-    <button onclick="analyzeText()">Analyze Text</button>
+<body>
+
+    <h1>Narrative Flow AI</h1>
+    <p class="subtitle">Analyze the multi-dimensional emotional trajectory and structure of your text.</p>
+
+    <div class="card">
+        <div id="errorBox" class="error-message"></div>
+        <textarea id="inputText"
+            placeholder="Paste your story, article, or narrative text here (minimum 10 characters)..."></textarea>
+        <button onclick="analyzeNarrativeText()">Analyze Narrative</button>
+    </div>
 
     <div id="results">
-        <h3>Analysis Results</h3>
-        <p id="summary"></p>
-        <ul id="feedbackList"></ul>
-        <div id="imageContainer"></div>
+        <!-- Metrics Summary -->
+        <div class="metrics-grid">
+            <div class="metric-box">
+                <h4>Total Sentences</h4>
+                <p id="statSentences">-</p>
+            </div>
+            <div class="metric-box">
+                <h4>Primary Arc Emotion</h4>
+                <p id="statPrimaryEmotion" style="text-transform: capitalize;">-</p>
+            </div>
+            <div class="metric-box">
+                <h4>Emotional Variance</h4>
+                <p id="statVariance">-</p>
+            </div>
+            <div class="metric-box">
+                <h4>Pacing Intensity</h4>
+                <p id="statIntensity">-</p>
+            </div>
+        </div>
+
+        <!-- Emotional Arc Multi-Line Chart -->
+        <div class="card">
+            <h3>Emotional Arc Trajectory</h3>
+            <div class="chart-container">
+                <canvas id="emotionalArcChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Structural Feedback -->
+        <div class="card">
+            <h3>Structural Heuristics & Feedback</h3>
+            <ul id="feedbackList" class="feedback-list"></ul>
+        </div>
     </div>
 
     <script>
-        // REPLACE THIS WITH YOUR RENDER URL
-        // const API_URL = "https://narratorflowai.onrender.com";
-        const API_URL = "http://127.0.0.1:8000"
+        const API_URL = "http://127.0.0.1:8000";
+        let sentimentChart = null;
 
-        async function analyzeText() {
-            const inputText = document.getElementById("inputText").value;
-            if (!inputText) {
-                alert("Please enter some text to analyze.");
+        async function analyzeNarrativeText() {
+            const text = document.getElementById("inputText").value.trim();
+            const errorBox = document.getElementById("errorBox");
+            const resultsDiv = document.getElementById("results");
+
+            // Reset views
+            errorBox.style.display = "none";
+            resultsDiv.style.display = "none";
+
+            if (text.length < 10) {
+                errorBox.innerText = "Please enter at least 10 characters of text to analyze.";
+                errorBox.style.display = "block";
                 return;
             }
-
-            const resultsDiv = document.getElementById("results");
-            resultsDiv.style.display = 'block'; // Show the results section
-            document.getElementById("summary").innerText = "Analyzing...";
-            document.getElementById("feedbackList").innerHTML = "";
-            document.getElementById("imageContainer").innerHTML = "";
 
             try {
                 const response = await fetch(`${API_URL}/analyze-narrative`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ text: inputText }),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
                 });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || "Server error occurred during analysis.");
+                }
 
                 const data = await response.json();
-
-                document.getElementById("summary").innerText = `Analysis Summary: ${data.analysis_summary.num_sentences} sentences found. Average Polarity: ${data.analysis_summary.average_polarity.toFixed(2)}`;
-
-                const feedbackList = document.getElementById("feedbackList");
-                data.feedback.forEach(item => {
-                    const li = document.createElement("li");
-                    li.textContent = item;
-                    feedbackList.appendChild(li);
-                });
-
-                const imageContainer = document.getElementById("imageContainer");
-                const img = document.createElement("img");
-                img.src = `${API_URL}${data.emotional_arc_plot_url}`;
-                img.alt = "Emotional Arc Plot";
-                imageContainer.appendChild(img);
+                renderResults(data);
 
             } catch (error) {
-                console.error('Error:', error);
-                document.getElementById("summary").innerText = "An error occurred during analysis.";
+                errorBox.innerText = error.message;
+                errorBox.style.display = "block";
             }
+        }
+
+        function renderResults(data) {
+            // 1. Populate Metrics Cards
+            document.getElementById("statSentences").innerText = data.metrics.total_sentences;
+            document.getElementById("statPrimaryEmotion").innerText = data.metrics.primary_arc_emotion;
+            document.getElementById("statVariance").innerText = data.metrics.emotional_variance;
+            document.getElementById("statIntensity").innerText = data.metrics.pacing_intensity;
+
+            // 2. Populate Feedback List
+            const feedbackList = document.getElementById("feedbackList");
+            feedbackList.innerHTML = "";
+            data.structural_feedback.forEach(item => {
+                const li = document.createElement("li");
+                li.textContent = item;
+                feedbackList.appendChild(li);
+            });
+
+            // 3. Render Chart.js Multi-Line Graph
+            renderChart(data.sentence_analysis);
+
+            // Show results container
+            document.getElementById("results").style.display = "block";
+        }
+
+        function renderChart(sentenceAnalysis) {
+            const ctx = document.getElementById('emotionalArcChart').getContext('2d');
+
+            // Extract labels (Sentence index / snippet)
+            const labels = sentenceAnalysis.map(s => `Sentence ${s.sentence_index + 1}`);
+
+            // Gather all possible emotion keys across sentences
+            const emotionKeys = Object.keys(sentenceAnalysis[0].emotion_scores);
+
+            // Distinct color palette for emotions
+            const colorPalette = {
+                joy: '#10b981',      // Emerald Green
+                sadness: '#3b82f6',  // Blue
+                anger: '#ef4444',    // Red
+                fear: '#8b5cf6',     // Purple
+                surprise: '#f59e0b', // Amber
+                disgust: '#64748b',  // Slate
+                neutral: '#94a3b8'   // Light Slate
+            };
+
+            // Build dataset for each emotion line
+            const datasets = emotionKeys.map(emotion => {
+                return {
+                    label: emotion.charAt(0).toUpperCase() + emotion.slice(1),
+                    data: sentenceAnalysis.map(s => s.emotion_scores[emotion] || 0),
+                    borderColor: colorPalette[emotion] || '#4f46e5',
+                    backgroundColor: colorPalette[emotion] || '#4f46e5',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: false
+                };
+            });
+
+            // Destroy previous chart instance if it exists to prevent memory leaks / canvas overlaps
+            if (sentimentChart) {
+                sentimentChart.destroy();
+            }
+
+            sentimentChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                footer: function (tooltipItems) {
+                                    const index = tooltipItems[0].dataIndex;
+                                    return `Text: "${sentenceAnalysis[index].text}"`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 1,
+                            title: {
+                                display: true,
+                                text: 'Confidence Score (0 to 1)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Story Timeline'
+                            }
+                        }
+                    }
+                }
+            });
         }
     </script>
 </body>

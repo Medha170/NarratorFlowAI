@@ -7,6 +7,7 @@ from schemas.narrative import AnalysisRequest, AnalysisResponse, SentenceEmotion
 from services.text_service import split_text_into_sentences
 from services.model_service import classify_sentence_async, emotion_classifier
 from services.metrics_service import calculate_narrative_metrics, generate_structural_feedback
+from services.cache_service import generate_text_hash, get_cached_analysis, cache_analysis
 
 router = APIRouter()
 
@@ -14,6 +15,16 @@ router = APIRouter()
 @router.post("/analyze-narrative", response_model=AnalysisResponse)
 async def analyze_narrative(request: AnalysisRequest):
     """Processes narrative text through model, text, and metrics services asynchronously."""
+    
+    text_hash = generate_text_hash(request.text)
+    cached_response = get_cached_analysis(text_hash)
+    
+    if cached_response:
+        print("Cache HIT: Returning stored analysis instantly.")
+        return cached_response
+
+    print("Cache MISS: Running full NLP pipeline inference...")
+
     sentences = split_text_into_sentences(request.text)
     if not sentences:
         raise HTTPException(status_code=400, detail="Unable to extract meaningful sentences from text.")
@@ -52,8 +63,12 @@ async def analyze_narrative(request: AnalysisRequest):
     metrics = calculate_narrative_metrics(sentence_analysis)
     feedback = generate_structural_feedback(metrics, sentence_analysis)
 
-    return AnalysisResponse(
+    response_data = AnalysisResponse(
         metrics=metrics,
         sentence_analysis=sentence_analysis,
         structural_feedback=feedback
     )
+
+    cache_analysis(text_hash, response_data)
+
+    return response_data

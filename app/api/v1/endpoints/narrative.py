@@ -3,11 +3,11 @@
 import asyncio
 from typing import List
 from fastapi import APIRouter, HTTPException
-from schemas.narrative import AnalysisRequest, AnalysisResponse, SentenceEmotionPoint
-from services.text_service import split_text_into_sentences
-from services.model_service import classify_sentence_async, emotion_classifier
-from services.metrics_service import calculate_narrative_metrics, generate_structural_feedback
-from services.cache_service import generate_text_hash, get_cached_analysis, cache_analysis
+from app.schemas.narrative import AnalysisRequest, AnalysisResponse, SentenceEmotionPoint
+from app.services.text_service import split_text_into_sentences
+from app.services.model_service import classify_sentence_async, emotion_classifier
+from app.services.metrics_service import calculate_narrative_metrics, generate_structural_feedback
+from app.services.cache_service import generate_text_hash, get_cached_analysis, cache_analysis
 
 router = APIRouter()
 

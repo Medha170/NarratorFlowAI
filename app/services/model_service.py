@@ -3,7 +3,7 @@
 import asyncio
 from typing import List, Dict, Any
 from transformers import pipeline
-from core.config import MODEL_NAME
+from app.core.config import MODEL_NAME
 
 emotion_classifier = None
 

@@ -2,7 +2,7 @@
 
 import numpy as np
 from typing import List
-from schemas.narrative import SentenceEmotionPoint, NarrativeMetrics
+from app.schemas.narrative import SentenceEmotionPoint, NarrativeMetrics
 
 
 def calculate_narrative_metrics(sentence_data: List[SentenceEmotionPoint]) -> NarrativeMetrics:

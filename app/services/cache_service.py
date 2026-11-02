@@ -1,7 +1,7 @@
 import hashlib
 import redis
 from typing import Optional
-from schemas.narrative import AnalysisResponse
+from app.schemas.narrative import AnalysisResponse
 
 try:
     redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)

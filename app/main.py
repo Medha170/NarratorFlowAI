@@ -3,8 +3,8 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from services.model_service import load_emotion_model, emotion_classifier
-from api.v1.endpoints.narrative import router as narrative_router
+from app.services.model_service import load_emotion_model, emotion_classifier
+from app.api.v1.endpoints.narrative import router as narrative_router
 
 
 @asynccontextmanager

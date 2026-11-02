@@ -6,29 +6,38 @@ from transformers import pipeline
 from app.core.config import MODEL_NAME
 
 emotion_classifier = None
+_model_lock = asyncio.Lock()
 
 
-def load_emotion_model():
+async def load_emotion_model():
     """Initializes and loads the Hugging Face transformer model globally."""
     global emotion_classifier
-    print("Loading Hugging Face emotion classifier model...")
-    emotion_classifier = pipeline(
-        "text-classification",
-        model=MODEL_NAME,
-        return_all_scores=True,
-        device=-1
-    )
-    print("Model loaded successfully!")
+    if emotion_classifier is None:
+        async with _model_lock:
+            if emotion_classifier is None:
+                print("Lazy-loading Hugging Face model on first request...")
+
+                loop = asyncio.get_running_loop()
+                emotion_classifier = await loop.run_in_executor(
+                    None,
+                    lambda: pipeline(
+                        "text-classification",
+                        model=MODEL_NAME,
+                        return_all_scores=True,
+                        device=-1
+                    )
+                )
+                print("Model lazy-loaded successfully into RAM!")
+    return emotion_classifier
 
 
 async def classify_sentence_async(sentence: str) -> List[Dict[str, Any]]:
-    """Offloads CPU-bound transformer pipeline inference to a background thread pool."""
-    if not emotion_classifier:
-        raise RuntimeError("Model is not initialized.")
-        
+    """Ensures the model is loaded, then runs sentence inference asynchronously."""
+    classifier = await load_emotion_model()
+
     loop = asyncio.get_running_loop()
-    raw_output = await loop.run_in_executor(None, emotion_classifier, sentence)
-    
+    raw_output = await loop.run_in_executor(None, classifier, sentence)
+
     if isinstance(raw_output, list) and len(raw_output) > 0:
         if isinstance(raw_output[0], list):
             return raw_output[0]

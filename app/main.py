@@ -3,14 +3,14 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.services.model_service import load_emotion_model, emotion_classifier
+from app.services.model_service import emotion_classifier
 from app.api.v1.endpoints.narrative import router as narrative_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI lifespan manager for loading and unloading models cleanly on startup/shutdown."""
-    load_emotion_model()
+    """FastAPI lifespan manager. Model loading is now deferred to first request (lazy loading)."""
+    print("FastAPI server successfully (Model will lazy-load on first request).")
     yield
     print("Shutting down application...")
 

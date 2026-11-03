@@ -1,45 +1,74 @@
-# app/services/model_service.py
 
 import asyncio
-from typing import List, Dict, Any
-from transformers import pipeline
+import numpy as np
+import onnxruntime as ort
+from transformers import AutoTokenizer
 from app.core.config import MODEL_NAME
 
-emotion_classifier = None
+MODEL_DIR = "artifacts/narratorflow-onnx"
+MODEL_PATH = f"{MODEL_DIR}/model.onnx"
+
+tokenizer = None
+session = None
 _model_lock = asyncio.Lock()
 
 
 async def load_emotion_model():
-    """Initializes and loads the Hugging Face transformer model globally."""
-    global emotion_classifier
-    if emotion_classifier is None:
+    global tokenizer, session
+
+    if session is None:
         async with _model_lock:
-            if emotion_classifier is None:
-                print("Lazy-loading Hugging Face model on first request...")
+            if session is None:
+                print("Loading quantized ONNX emotion model...")
 
-                loop = asyncio.get_running_loop()
-                emotion_classifier = await loop.run_in_executor(
-                    None,
-                    lambda: pipeline(
-                        "text-classification",
-                        model=MODEL_NAME,
-                        return_all_scores=True,
-                        device=-1
-                    )
+                tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
+
+                session = ort.InferenceSession(
+                    MODEL_PATH,
+                    providers=["CPUExecutionProvider"]
                 )
-                print("Model lazy-loaded successfully into RAM!")
-    return emotion_classifier
+
+                print("ONNX model loaded successfully!")
+
+    return tokenizer, session
 
 
-async def classify_sentence_async(sentence: str) -> List[Dict[str, Any]]:
-    """Ensures the model is loaded, then runs sentence inference asynchronously."""
-    classifier = await load_emotion_model()
+async def classify_sentence_async(sentence: str):
+    current_tokenizer, current_session = await load_emotion_model()
+
+    inputs = current_tokenizer(
+        sentence,
+        return_tensors="np",
+        truncation=True,
+        max_length=512
+    )
 
     loop = asyncio.get_running_loop()
-    raw_output = await loop.run_in_executor(None, classifier, sentence)
 
-    if isinstance(raw_output, list) and len(raw_output) > 0:
-        if isinstance(raw_output[0], list):
-            return raw_output[0]
-        return raw_output
-    return []
+    def run_inference():
+        outputs = current_session.run(None, dict(inputs))
+        logits = outputs[0][0]
+
+        probabilities = np.exp(logits - np.max(logits))
+        probabilities = probabilities / probabilities.sum()
+
+        return [
+            {
+                "label": current_session_label(idx),
+                "score": float(score)
+            }
+            for idx, score in enumerate(probabilities)
+        ]
+
+    return await loop.run_in_executor(None, run_inference)
+
+
+def current_session_label(index):
+    from app.core.config import MODEL_NAME
+    from transformers import AutoConfig
+
+    if not hasattr(current_session_label, "labels"):
+        config = AutoConfig.from_pretrained(MODEL_DIR)
+        current_session_label.labels = config.id2label
+
+    return current_session_label.labels[index]

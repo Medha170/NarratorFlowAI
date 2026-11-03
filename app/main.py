@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.services.model_service import emotion_classifier
+from app.services import model_service
 from app.api.v1.endpoints.narrative import router as narrative_router
 
 
@@ -40,5 +40,5 @@ async def health_check():
     """Health check endpoint for production load balancers and container probes."""
     return {
         "status": "healthy",
-        "model_loaded": emotion_classifier is not None
+        "model_loaded": model_service.session is not None
     }

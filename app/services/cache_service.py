@@ -1,13 +1,16 @@
+import os
 import hashlib
 import redis
 from typing import Optional
 from app.schemas.narrative import AnalysisResponse
 
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6739/0")
+
 try:
-    redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+    redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
     redis_client.ping()
     REDIS_AVAILABLE = True
-    print("Redis cache connected sucessfully!")
+    print(f"Redis cache connected sucessfully via: {REDIS_URL.split('@')[-1]}")
 except Exception as e:
     REDIS_AVAILABLE = False
     redis_client = None

@@ -1,8 +1,20 @@
-fastapi
-uvicorn
-pydantic
-redis
-numpy
-transformers
---index-url https://download.pytorch.org/whl/cpu
-torch
+# API
+fastapi==0.116.1
+uvicorn==0.35.0
+
+# Machine Learning
+torch==2.14.1
+transformers==5.20.2
+
+# NLP
+nltk==3.10.3
+textblob==0.19.0
+
+# Numerical computing
+numpy==2.5.3
+
+# Caching (optional at runtime)
+redis==8.1.0
+
+# Environment configuration
+python-dotenv==1.2.3
